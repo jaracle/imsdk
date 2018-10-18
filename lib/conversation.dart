@@ -1,6 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
 
-part 'Conversation.g.dart';
+part 'conversation.g.dart';
 
 @JsonSerializable()
 class Conversation extends Object with _$ConversationSerializerMixin {

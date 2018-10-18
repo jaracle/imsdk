@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
-import 'Conversation.dart';
-import 'Message.dart';
+import 'conversation.dart';
+import 'message.dart';
 
 typedef void OnNewMessage(Message message);
 

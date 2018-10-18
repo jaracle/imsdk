@@ -3,8 +3,8 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:imsdk/imsdk.dart';
-import 'package:imsdk/MessageElement.dart';
-import 'package:imsdk/Conversation.dart';
+import 'package:imsdk/message_element.dart';
+import 'package:imsdk/conversation.dart';
 
 void main() => runApp(new MyApp());
 

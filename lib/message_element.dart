@@ -1,6 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
 
-part 'MessageElement.g.dart';
+part 'message_element.g.dart';
 
 @JsonSerializable()
 class MessageElement extends Object with _$MessageElementSerializerMixin {
