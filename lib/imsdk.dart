@@ -42,6 +42,14 @@ class Imsdk {
     return ret.map(Conversation.createFromJson).toList();
   }
 
+  static Future<Conversation> getConversation(String type,String id) async{
+    dynamic ret = await _channel.invokeMethod('getConversation',{
+      'type':type,
+      'id':id
+    });
+    return Conversation.createFromJson(ret);
+  }
+
   static Future<bool> sendTextMessage(String conversationType,String id,String text) async{
     bool ret = await _channel.invokeMethod('sendTextMessage',{
       'type':conversationType,

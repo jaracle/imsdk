@@ -5,10 +5,11 @@ part 'message.g.dart';
 
 @JsonSerializable()
 class Message extends Object with _$MessageSerializerMixin {
-	Message(this.time,this.count,this.elements);
+	Message(this.time,this.count,this.elements,this.sender);
 
 	int time;
 	int count;
+	String sender;
 	List<MessageElement> elements;
 
 	factory Message.fromJson(Map<String, dynamic> json) => _$MessageFromJson(json);

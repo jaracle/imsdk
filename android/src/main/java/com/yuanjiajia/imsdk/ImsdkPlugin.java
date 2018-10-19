@@ -390,6 +390,13 @@ public class ImsdkPlugin implements MethodCallHandler {
             }else{
                 result.error("IMSDK","getMessage,Invalid conversation.",null);
             }
+        }else if(isMethod(call,"getConversation")){
+            TIMConversation conversation = parseConversation(call);
+            if(conversation != null){
+                result.success(conversation);
+            }else{
+                result.error("IMSDK","Error getting conversation.",null);
+            }
         }
     }
 
@@ -405,6 +412,7 @@ public class ImsdkPlugin implements MethodCallHandler {
         Map<String,Object> map = new HashMap<>();
         map.put("time",message.timestamp());
         map.put("count",message.getElementCount());
+        map.put("sender",message.getSender());
         List<Map<String,String>> elements = new ArrayList<>();
         for(int i = 0; i < message.getElementCount(); ++i) {
             TIMElem elem = message.getElement(i);

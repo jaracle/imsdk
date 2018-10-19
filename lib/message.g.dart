@@ -14,13 +14,19 @@ Message _$MessageFromJson(Map<String, dynamic> json) {
           ?.map((e) => e == null
               ? null
               : new MessageElement.fromJson(e as Map<String, dynamic>))
-          ?.toList());
+          ?.toList(),
+      json['sender'] as String);
 }
 
 abstract class _$MessageSerializerMixin {
   int get time;
   int get count;
+  String get sender;
   List<MessageElement> get elements;
-  Map<String, dynamic> toJson() =>
-      <String, dynamic>{'time': time, 'count': count, 'elements': elements};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'time': time,
+        'count': count,
+        'sender': sender,
+        'elements': elements
+      };
 }
