@@ -1,6 +1,6 @@
 name: imsdk
 description: A Flutter plugin for Tencent-cloud's IM sdk.
-version: 0.0.1
+version: 0.0.14
 author: Jaracle Zhang <jaracle.zhang@gmail.com>
 homepage: https://github.com/jaracle/imsdk
 

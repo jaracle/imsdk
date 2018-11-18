@@ -15,18 +15,27 @@ Message _$MessageFromJson(Map<String, dynamic> json) {
               ? null
               : new MessageElement.fromJson(e as Map<String, dynamic>))
           ?.toList(),
-      json['sender'] as String);
+      json['sender'] as String,
+      json['isSelf'] as bool,
+      json['conversationType'] as String,
+      json['conversationId'] as String);
 }
 
 abstract class _$MessageSerializerMixin {
   int get time;
   int get count;
   String get sender;
+  bool get isSelf;
   List<MessageElement> get elements;
+  String get conversationType;
+  String get conversationId;
   Map<String, dynamic> toJson() => <String, dynamic>{
         'time': time,
         'count': count,
         'sender': sender,
-        'elements': elements
+        'isSelf': isSelf,
+        'elements': elements,
+        'conversationType': conversationType,
+        'conversationId': conversationId
       };
 }

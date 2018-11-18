@@ -11,6 +11,8 @@ import com.tencent.imsdk.TIMConversation;
 import com.tencent.imsdk.TIMConversationType;
 import com.tencent.imsdk.TIMElem;
 import com.tencent.imsdk.TIMElemType;
+import com.tencent.imsdk.TIMFaceElem;
+import com.tencent.imsdk.TIMFriendshipManager;
 import com.tencent.imsdk.TIMFriendshipSettings;
 import com.tencent.imsdk.TIMGroupEventListener;
 import com.tencent.imsdk.TIMGroupMemberInfo;
@@ -26,6 +28,7 @@ import com.tencent.imsdk.TIMMessageListener;
 import com.tencent.imsdk.TIMRefreshListener;
 import com.tencent.imsdk.TIMSNSChangeInfo;
 import com.tencent.imsdk.TIMSdkConfig;
+import com.tencent.imsdk.TIMSoundElem;
 import com.tencent.imsdk.TIMTextElem;
 import com.tencent.imsdk.TIMUser;
 import com.tencent.imsdk.TIMUserConfig;
@@ -76,6 +79,7 @@ public class ImsdkPlugin implements MethodCallHandler {
     }
 
     private void initSdk(int appId) {
+        log("initSdk,appId="+appId);
         this.appId = appId;
         TIMSdkConfig config = new TIMSdkConfig(appId)
                 .enableLogPrint(true)
@@ -103,6 +107,10 @@ public class ImsdkPlugin implements MethodCallHandler {
     }
 
     private void handleNewMessage(TIMMessage msg) {
+        log("onNewMessage");
+        for(int i = 0;i < msg.getElementCount();i ++){
+            log("element "+i+" "+msg.getElement(i).getType());
+        }
         Map<String,Object> args = new HashMap<>();
         args.put("message",parseMessage(msg));
         channel.invokeMethod("onNewMessage",args);
@@ -129,6 +137,13 @@ public class ImsdkPlugin implements MethodCallHandler {
                 }
             }
         });
+    }
+
+    private void modifyProfile(String nickName,String avatar,final TIMCallBack callBack){
+        TIMFriendshipManager.ModifyUserProfileParam param = new TIMFriendshipManager.ModifyUserProfileParam();
+        param.setNickname(nickName);
+        param.setFaceUrl(avatar);
+        TIMFriendshipManager.getInstance().modifyProfile(param,callBack);
     }
 
     private TIMGroupSettings initGroupSettings() {
@@ -301,9 +316,7 @@ public class ImsdkPlugin implements MethodCallHandler {
         return TIMManagerExt.getInstance().getConversationList();
     }
 
-    private void sendTextMessage(String text, TIMConversation conversation,TIMValueCallBack<TIMMessage> callBack) {
-        //构造一条消息
-        TIMMessage msg = new TIMMessage();
+    private void sendTextMessage(TIMMessage msg,String text, TIMConversation conversation,TIMValueCallBack<TIMMessage> callBack) {
         //添加文本内容
         TIMTextElem elem = new TIMTextElem();
         elem.setText(text);
@@ -314,6 +327,57 @@ public class ImsdkPlugin implements MethodCallHandler {
         conversation.sendMessage(msg, callBack);
     }
 
+    private void sendEmojiMessage(TIMMessage msg,int emoji, TIMConversation conversation,TIMValueCallBack<TIMMessage> callBack) {
+        TIMFaceElem elem = new TIMFaceElem();
+        elem.setIndex(emoji);
+        //将elem添加到消息
+        if (msg.addElement(elem) != 0) {
+            return;
+        }
+        conversation.sendMessage(msg, callBack);
+    }
+
+    private void sendVoiceMessage(TIMMessage msg,String voiceFile,int duration, TIMConversation conversation,TIMValueCallBack<TIMMessage> callBack) {
+        TIMSoundElem elem = new TIMSoundElem();
+        elem.setPath(voiceFile);
+        elem.setDuration(duration);
+        //将elem添加到消息
+        if (msg.addElement(elem) != 0) {
+            return;
+        }
+        conversation.sendMessage(msg, callBack);
+    }
+
+    private void sendImageMessage(TIMMessage msg,TIMConversation conversation,TIMValueCallBack<TIMMessage> callBack,List<String> images) {
+        if(images != null){
+            for(String image : images){
+                TIMImageElem elem = new TIMImageElem();
+                elem.setPath(image);
+                elem.setLevel(1);
+                //将elem添加到消息
+                if (msg.addElement(elem) != 0) {
+                    return;
+                }
+            }
+            conversation.sendMessage(msg, callBack);
+        }
+    }
+
+    private TIMMessage createBaseMessage(String ... params){
+        //构造一条消息
+        TIMMessage msg = new TIMMessage();
+        if(params != null){
+            for(String param : params){
+                TIMTextElem elem = new TIMTextElem();
+                elem.setText(param);
+                if (msg.addElement(elem) != 0) {
+                    return null;
+                }
+            }
+        }
+        return msg;
+    }
+
     private void logout(TIMCallBack callBack) {
         //登出
         TIMManager.getInstance().logout(callBack);
@@ -321,6 +385,10 @@ public class ImsdkPlugin implements MethodCallHandler {
 
     private void log(String text) {
         Log.e("IMSDK",text);
+        Map<String,String> args = new HashMap<>();
+        args.put("tag","IMSDK");
+        args.put("content",text);
+        channel.invokeMethod("log",args);
     }
 
     @Override
@@ -330,13 +398,14 @@ public class ImsdkPlugin implements MethodCallHandler {
         }else if(isMethod(call,"initSdk")){
             int appId = call.argument("appId");
             initSdk(appId);
+            result.success(null);
         }else if(isMethod(call,"login")){
             String id = call.argument("id");
             String signature = call.argument("signature");
             login(id, signature, new TIMCallBack() {
                 @Override
                 public void onError(int i, String s) {
-                    result.success(false);
+                    result.error("IMSDK","Login error code:"+i+" reason:"+s,null);
                 }
 
                 @Override
@@ -346,31 +415,104 @@ public class ImsdkPlugin implements MethodCallHandler {
             });
         }else if(isMethod(call,"getConversationList")){
             List<TIMConversation> conversations = getConversationList();
-            List<Map<String,String>> ret = new ArrayList<>();
+            List<Map<String,Object>> ret = new ArrayList<>();
             for(TIMConversation conversation : conversations){
-                Map map = new HashMap();
-                map.put("type",conversation.getType().toString());
-                map.put("id",conversation.getPeer());
-                ret.add(map);
+                ret.add(encodeConversation(conversation));
             }
             result.success(ret);
         }else if(isMethod(call,"sendTextMessage")){
             String content = call.argument("content");
             TIMConversation conversation = parseConversation(call);
             if(conversation != null){
-                sendTextMessage(content, conversation, new TIMValueCallBack<TIMMessage>() {
-                    @Override
-                    public void onError(int i, String s) {
-                        result.error("IMSDK","Error sending text message.",null);
-                    }
+                log("Ready to send text message "+content+" in conversation "+conversation.getPeer());
+                sendTextMessage(
+                        createBaseMessage(),
+                        content, conversation,
+                        new TIMValueCallBack<TIMMessage>() {
+                            @Override
+                            public void onError(int i, String s) {
+                                result.error("IMSDK","Error sending text message.code:"+i+" reason:"+s,null);
+                            }
 
-                    @Override
-                    public void onSuccess(TIMMessage timMessage) {
-                        result.success(true);
-                    }
-                });
+                            @Override
+                            public void onSuccess(TIMMessage timMessage) {
+                                result.success(true);
+                            }
+                        }
+                );
             }else{
                 result.error("IMSDK","sendTextMessage,Invalid conversation.",null);
+            }
+        }else if(isMethod(call,"sendImageMessage")){
+            List images = call.argument("images");
+            TIMConversation conversation = parseConversation(call);
+            if(conversation != null){
+                log("Ready to send image in conversation "+conversation.getPeer());
+                sendImageMessage(
+                    createBaseMessage(),
+                    conversation,
+                    new TIMValueCallBack<TIMMessage>() {
+                        @Override
+                        public void onError(int i, String s) {
+                            result.error("IMSDK","Error sending image message.code:"+i+" reason:"+s,null);
+                        }
+
+                        @Override
+                        public void onSuccess(TIMMessage timMessage) {
+                            result.success(true);
+                        }
+                    },
+                    images
+                );
+            }else{
+                result.error("IMSDK","sendImageMessage,Invalid conversation.",null);
+            }
+        }else if(isMethod(call,"sendVoiceMessage")){
+            String voiceFile = call.argument("voiceFile");
+            int duration = call.argument("duration");
+            TIMConversation conversation = parseConversation(call);
+            if(conversation != null){
+                log("Ready to send voice message "+voiceFile+" in conversation "+conversation.getPeer());
+                sendVoiceMessage(
+                        createBaseMessage(),
+                        voiceFile,duration, conversation,
+                        new TIMValueCallBack<TIMMessage>() {
+                            @Override
+                            public void onError(int i, String s) {
+                                result.error("IMSDK","Error sending voice message.code:"+i+" reason:"+s,null);
+                            }
+
+                            @Override
+                            public void onSuccess(TIMMessage timMessage) {
+                                result.success(true);
+                            }
+                        }
+                );
+            }else{
+                result.error("IMSDK","sendVoiceMessage,Invalid conversation.",null);
+            }
+        }else if(isMethod(call,"sendEmojiMessage")){
+            int emoji = call.argument("emoji");
+            TIMConversation conversation = parseConversation(call);
+            if(conversation != null){
+                log("Ready to send emoji message "+emoji+" in conversation "+conversation.getPeer());
+                sendEmojiMessage(
+                        createBaseMessage(),
+                        emoji, conversation,
+                        new TIMValueCallBack<TIMMessage>() {
+                            @Override
+                            public void onError(int i, String s) {
+                                result.error("IMSDK","Error sending emoji message.code:"+i+" reason:"+s,null);
+                            }
+
+                            @Override
+                            public void onSuccess(TIMMessage timMessage) {
+                                result.success(true);
+                            }
+                        }
+                );
+            }else{
+                result.error("IMSDK","sendEmojiMessage,Invalid conversation.",null);
             }
         }else if(isMethod(call,"getMessage")){
             int count = call.argument("count");
@@ -379,7 +521,7 @@ public class ImsdkPlugin implements MethodCallHandler {
                 getMessage(conversation, count, new TIMValueCallBack<List<TIMMessage>>() {
                     @Override
                     public void onError(int i, String s) {
-                        result.error("IMSDK","Error getting message.",null);
+                        result.error("IMSDK","Error getting message.code:"+i+" reason:"+s,null);
                     }
 
                     @Override
@@ -393,11 +535,80 @@ public class ImsdkPlugin implements MethodCallHandler {
         }else if(isMethod(call,"getConversation")){
             TIMConversation conversation = parseConversation(call);
             if(conversation != null){
-                result.success(conversation);
+                result.success(encodeConversation(conversation));
             }else{
                 result.error("IMSDK","Error getting conversation.",null);
             }
+        }else if(isMethod(call,"deleteConversation")){
+            String type = call.argument("type");
+            String id = call.argument("id");
+            if(type.equals("C2C")){
+                deleteConversation(TIMConversationType.C2C,id);
+                result.success(null);
+            }else if(type.equals("Group")){
+                deleteConversation(TIMConversationType.Group,id);
+                result.success(null);
+            }else{
+                result.error("IMSDK","Error getting conversation.",null);
+            }
+        }else if(isMethod(call,"getSelfProfile")){
+            TIMFriendshipManager.getInstance().getSelfProfile(new TIMValueCallBack<TIMUserProfile>() {
+                @Override
+                public void onError(int i, String s) {
+                    result.error("IMSDK","Error getting profile.code:"+i+" reason:"+s,null);
+                }
+
+                @Override
+                public void onSuccess(TIMUserProfile timUserProfile) {
+                    result.success(encodeProfile(timUserProfile));
+                }
+            });
+        }else if(isMethod(call,"getUsersProfile")){
+            List users = call.argument("users");
+            TIMFriendshipManager.getInstance().getUsersProfile(users, new TIMValueCallBack<List<TIMUserProfile>>() {
+                @Override
+                public void onError(int i, String s) {
+                    result.error("IMSDK","Error getting profiles.code:"+i+" reason:"+s,null);
+                }
+
+                @Override
+                public void onSuccess(List<TIMUserProfile> timUserProfiles) {
+                    List profiles = new ArrayList();
+                    for(TIMUserProfile profile : timUserProfiles){
+                        profiles.add(encodeProfile(profile));
+                    }
+                    result.success(profiles);
+                }
+            });
+        }else if(isMethod(call,"modifyProfile")){
+            String nickName = call.argument("nickName");
+            String avatar = call.argument("avatar");
+            modifyProfile(nickName, avatar, new TIMCallBack() {
+                @Override
+                public void onError(int i, String s) {
+                    result.error("IMSDK","Error modifying profile.code:"+i+" reason:"+s,null);
+                }
+
+                @Override
+                public void onSuccess() {
+                    result.success(true);
+                }
+            });
         }
+    }
+
+    private Map<String,Object> encodeProfile(TIMUserProfile profile){
+        Map<String,Object> result = new HashMap<>();
+        result.put("nickName",profile.getNickName());
+        result.put("avatar",profile.getFaceUrl());
+        return result;
+    }
+
+    private Map<String,Object> encodeConversation(TIMConversation conversation){
+        Map<String,Object> ret = new HashMap<>();
+        ret.put("type",conversation.getType().toString());
+        ret.put("id",conversation.getPeer());
+        return ret;
     }
 
     private List<Map<String,Object>> parseMessageList(List<TIMMessage> messageList){
@@ -408,17 +619,22 @@ public class ImsdkPlugin implements MethodCallHandler {
         return ret;
     }
 
+
+
     private Map<String,Object> parseMessage(TIMMessage message){
         Map<String,Object> map = new HashMap<>();
         map.put("time",message.timestamp());
         map.put("count",message.getElementCount());
         map.put("sender",message.getSender());
-        List<Map<String,String>> elements = new ArrayList<>();
+        map.put("isSelf",message.isSelf());
+        map.put("conversationType",message.getConversation().getType().toString());
+        map.put("conversationId",message.getConversation().getPeer());
+        List<Map<String,Object>> elements = new ArrayList<>();
         for(int i = 0; i < message.getElementCount(); ++i) {
             TIMElem elem = message.getElement(i);
             //获取当前元素的类型
             TIMElemType elemType = elem.getType();
-            Map<String,String> data = new HashMap<>();
+            Map<String,Object> data = new HashMap<>();
             if (elemType == TIMElemType.Text) {
                 TIMTextElem e = (TIMTextElem)elem;
                 //处理文本消息
@@ -427,10 +643,26 @@ public class ImsdkPlugin implements MethodCallHandler {
                 //处理图片消息
                 TIMImageElem e = (TIMImageElem)elem;
                 List<TIMImage> imageList = e.getImageList();
+                List<Map<String,Object>> items = new ArrayList<>();
                 for(TIMImage image : imageList){
                     log("image------------"+image.getUrl());
+                    Map<String,Object> item = new HashMap<>();
+                    item.put("uuid",image.getUuid());
+                    item.put("url",image.getUrl());
+                    item.put("width",image.getWidth());
+                    item.put("height",image.getHeight());
+                    items.add(item);
                 }
-            }//...处理更多消息
+                data.put("images",items);
+            }else if(elemType == TIMElemType.Sound){
+                TIMSoundElem e = (TIMSoundElem)elem;
+                data.put("file",e.getPath());
+                data.put("uuid",e.getUuid());
+                data.put("duration",e.getDuration());
+            }else if(elemType == TIMElemType.Face){
+                TIMFaceElem e = (TIMFaceElem)elem;
+                data.put("index",e.getIndex());
+            }
             elements.add(data);
         }
         map.put("elements",elements);

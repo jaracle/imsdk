@@ -10,4 +10,8 @@ class MessageElement extends Object with _$MessageElementSerializerMixin {
 	String text;
 
 	factory MessageElement.fromJson(Map<String, dynamic> json) => _$MessageElementFromJson(json);
+
+	static MessageElement createFromJson(dynamic json){
+		return new MessageElement(json['type'] as String, json['text'] as String);
+	}
 }

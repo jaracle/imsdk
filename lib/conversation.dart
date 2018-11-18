@@ -11,5 +11,9 @@ class Conversation extends Object with _$ConversationSerializerMixin {
 
 	factory Conversation.fromJson(Map<String, dynamic> json) => _$ConversationFromJson(json);
 
-	static Conversation createFromJson(dynamic json) => _$ConversationFromJson(json);
+
+	static Conversation createFromJson(dynamic json){
+		return new Conversation(json['type'] as String, json['id'] as String);
+	}
+
 }

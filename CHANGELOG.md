@@ -1,4 +1,5 @@
-## 0.0.2
+## 0.0.13
 
-* Add getConversation method.
-* Add 'sender' field to Message class.
+* Add - Send image,voice,emoji message support.
+* Add - Get self profile and other users profile support.
+* Add - Modify self profile support.
